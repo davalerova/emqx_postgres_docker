@@ -1,5 +1,3 @@
-version: '3.8'
-
 volumes:
   vol-emqx-data:
     name: foo-emqx-data
@@ -7,9 +5,9 @@ volumes:
     name: foo-emqx-etc
   vol-emqx-log:
     name: foo-emqx-log
-  
-  mariadb:
-    driver: local
+
+  app-db-data:
+
 
 networks:
   iot:
@@ -17,48 +15,42 @@ networks:
     driver: bridge
 
 services:
-  
-  mariadb:
-    container_name: mariadb
-    image: mariadb:latest
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
-      MYSQL_USER:  ${MARIADB_USER} 
-      MYSQL_PASSWORD: ${MARIADB_PASSWORD}
-      MYSQL_DATABASE: ${MARIADB_DATABASE}
-    ports:
-      - "4000:3306"
-    volumes:
-      - mariadb:/var/lib/mysql
-      - ./db:/docker-entrypoint-initdb.d
-    networks:
-      iot:
-        aliases: 
-          - mariadb_host
 
-  phpmyadmin:
-    depends_on:
-      - mariadb
-    container_name: phpmyadmin
-    image: phpmyadmin:latest
+  db:
+    image: postgres:13
     restart: always
-    expose:
-      - "4001"
-    ports:
-      - "4001:80"
+    volumes:
+      - app-db-data:/var/lib/postgresql/data/pgdata
+      - ./db/initialize_db.sh:/docker-entrypoint-initdb.d/initialize_db.sh
+      - ./db/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+
+    env_file:
+      - .env
     environment:
-      - PMA_HOST=mariadb_host
-      - PMA_PORT=3306 
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
+      - POSTGRES_USER=${POSTGRES_USER?Variable not set}
+      - POSTGRES_DB=${POSTGRES_DB?Variable not set}
     networks:
       iot:
-        aliases: 
-          - phpmyadmin_host
+        aliases:
+          - postgres_host
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    networks:
+      iot:
+        aliases:
+          - adminer_host
+
   emqx:
-    depends_on:
-      - mariadb
     container_name: emqx
-    image: emqx/emqx:4.4.14
+    image: emqx/emqx:4.4.19
+    depends_on:
+      - db
     restart: always
 
     ports:
@@ -68,32 +60,43 @@ services:
       - 8883:8883
       - 8073:8083
       - 8074:8084
+      - 8082:8082
+      - 8081:8081
 
     volumes:
       - vol-emqx-data:/opt/emqx/data
       - vol-emqx-etc:/opt/emqx/etc
       - vol-emqx-log:/opt/emqx/log
- 
+
+    # extra_hosts:
+    #   - "localhost:192.168.30.170"
+
     environment:
-      EMQX_NAME: iothost-org
+      TZ: ${TZ}
+      EMQX_NAME: ${EMQX_NAME}
       EMQX_HOST: 127.0.0.1
 
       ## Value: String
       # dashboard.default_user.password = public
-      EMQX_DASHBOARD__DEFAULT_USER__PASSWORD: "emqxpass"
+      EMQX_DASHBOARD__DEFAULT_USER__PASSWORD: ${EMQX_DASHBOARD_DEFAULT_USER_PASSWORD}
 
-      EMQX_ALLOW_ANONYMOUS: "false"
+      EMQX_ALLOW_ANONYMOUS: ${EMQX_ALLOW_ANONYMOUS}
       EMQX_NOMATCH: "deny"
-      # Configurar pluguins reglas acl
-      # etc/plugins/emqx_auth_mysql.conf
-      #auth.mysql.server = 127.0.0.1:3306
-      EMQX_AUTH__MYSQL__SERVER: "mariadb_host:3306" 
-      #auth.mysql.username = emqx
-      EMQX_AUTH__MYSQL__USERNAME: ${MARIADB_USER} 
-      #auth.mysql.password = public
-      EMQX_AUTH__MYSQL__PASSWORD: ${MARIADB_PASSWORD} 
-      #auth.mysql.database = mqtt
-      EMQX_AUTH__MYSQL__DATABASE: ${MARIADB_DATABASE} 
+      EMQX_NODE_COOKIE: ${EMQX_NODE_COOKIE}
+
+      # auth.pgsql.encoding = utf8
+      EMQX_AUTH__PGSQL__SERVER: ${EMQX_AUTH_PGSQL_SERVER}
+      # auth.pgsql.pool = 8
+      EMQX_AUTH__PGSQL__POOL: "8"
+      # auth.pgsql.username = root
+      EMQX_AUTH__PGSQL__USERNAME: ${POSTGRES_USER}
+      # auth.pgsql.password = public
+      EMQX_AUTH__PGSQL__PASSWORD: ${POSTGRES_PASSWORD}
+      # auth.pgsql.database = mqtt
+      EMQX_AUTH__PGSQL__DATABASE: ${POSTGRES_DB}
+      #auth.pgsql.encoding = utf8
+      EMQX_AUTH__PGSQL__ENCODING: "utf8"
+      #auth.pgsql.ssl = false
 
       #dashboard.listener.https = 18084
       EMQX_DASHBOARD__LISTENER__HTTPS: 18084
@@ -135,13 +138,9 @@ services:
       #listener.wss.external.max_connections = 102400 Puerto 8084
       EMQX_LISTENER__WSS__EXTERNAL__MAX_CONNECTIONS: 1000
 
-      EMQX_LOADED_PLUGINS: "emqx_recon,emqx_retainer,emqx_management,emqx_dashboard,emqx_auth_mysql"
-    
+      EMQX_LOADED_PLUGINS: "emqx_recon,emqx_retainer,emqx_management,emqx_dashboard,emqx_auth_pgsql"
+
     networks:
       iot:
         aliases:
           - emqx_host
-
-    
-
-
