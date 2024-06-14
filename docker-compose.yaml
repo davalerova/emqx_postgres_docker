@@ -17,6 +17,7 @@ networks:
 services:
 
   db:
+    container_name: db
     image: postgres:13
     restart: always
     volumes:
@@ -37,6 +38,7 @@ services:
           - postgres_host
 
   adminer:
+    container_name: adminer
     image: adminer
     restart: always
     ports:
