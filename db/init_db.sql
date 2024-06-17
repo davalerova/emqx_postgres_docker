@@ -2,16 +2,16 @@
 CREATE TABLE mqtt_user (
   id SERIAL PRIMARY KEY,
   username CHARACTER VARYING(100),
-  password CHARACTER VARYING(100),
+  hashed_password CHARACTER VARYING(100),
   salt CHARACTER VARYING(40),
   is_superuser BOOLEAN,
   UNIQUE (username)
 );
 
 /* Insertar usuarios */
-INSERT INTO mqtt_user (username, password, salt, is_superuser) VALUES
-('emqx', 'efa1f375d76194fa51a3556a97e641e61685f914d446979da50a551a4333ffd7', NULL, true),
-('sensor1', 'efa1f375d76194fa51a3556a97e641e61685f914d446979da50a551a4333ffd7', NULL, false);
+INSERT INTO mqtt_user (username, hashed_password, salt, is_superuser) VALUES
+('emqx', '$2b$12$r7MK0qEs.C6x5SCDhhmOWOV0DRGwaTKdKv9gadn56JBTvNBd12M/.', NULL, true),
+('sensor1', '$2b$12$r7MK0qEs.C6x5SCDhhmOWOV0DRGwaTKdKv9gadn56JBTvNBd12M/.', NULL, false);
 
 /* Crear la tabla mqtt_acl */
 CREATE TABLE mqtt_acl (
